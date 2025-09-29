@@ -4,6 +4,13 @@ import { ComplianceScore } from "./ComplianceScore";
 import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { createClient } from "@supabase/supabase-js";
+import { useToast } from "@/components/ui/use-toast";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 interface BinData {
   type: "dry" | "wet" | "metal";
@@ -11,20 +18,16 @@ interface BinData {
   status: "normal" | "warning" | "full";
 }
 
-// Mock data - replace with ESP32 API calls
-const mockBinData: BinData[] = [
-  { type: "dry", fillLevel: 45, status: "normal" },
-  { type: "wet", fillLevel: 78, status: "warning" },
-  { type: "metal", fillLevel: 92, status: "full" }
-];
-
 export function Dashboard() {
-  const [binData, setBinData] = useState<BinData[]>(mockBinData);
-  const [isConnected, setIsConnected] = useState(true);
+  const [binData, setBinData] = useState<BinData[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
   
   // Calculate compliance score based on bin status
   const calculateComplianceScore = (bins: BinData[]) => {
+    if (bins.length === 0) return 0;
     const scores = bins.map(bin => {
       if (bin.status === "full") return 30;
       if (bin.status === "warning") return 70;
@@ -35,29 +38,71 @@ export function Dashboard() {
 
   const complianceScore = calculateComplianceScore(binData);
 
-  // Simulate ESP32 data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Simulate random fill level changes
-      setBinData(prev => prev.map(bin => {
-        const change = Math.random() * 6 - 3; // -3 to +3% change
-        const newLevel = Math.max(0, Math.min(100, bin.fillLevel + change));
-        
-        let status: "normal" | "warning" | "full" = "normal";
-        if (newLevel >= 95) status = "full";
-        else if (newLevel >= 80) status = "warning";
-        
-        return { ...bin, fillLevel: Math.round(newLevel), status };
-      }));
-      setLastUpdate(new Date());
-    }, 5000);
+  // Convert Supabase data to component format
+  const convertSupabaseData = (data: any[]): BinData[] => {
+    return data.map(bin => ({
+      type: bin.bin_type as "dry" | "wet" | "metal",
+      fillLevel: Math.round(bin.fill_level),
+      status: bin.fill_level >= 95 ? "full" : bin.fill_level >= 80 ? "warning" : "normal"
+    }));
+  };
 
-    return () => clearInterval(interval);
+  // Fetch bin data from Supabase
+  const fetchBinData = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('bins')
+        .select('*')
+        .order('bin_type');
+
+      if (error) {
+        console.error('Error fetching bin data:', error);
+        setIsConnected(false);
+        toast({
+          title: "Connection Error",
+          description: "Failed to fetch bin data",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setBinData(convertSupabaseData(data));
+        setIsConnected(true);
+        setLastUpdate(new Date());
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Set up real-time subscription
+  useEffect(() => {
+    fetchBinData();
+
+    // Subscribe to real-time changes
+    const subscription = supabase
+      .channel('bins_changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'bins' },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          fetchBinData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleRefresh = () => {
-    // In real app, this would fetch from ESP32
-    setLastUpdate(new Date());
+    fetchBinData();
   };
 
   return (
