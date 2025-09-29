@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { BinCard } from "./BinCard";
-import { ComplianceScore } from "./ComplianceScore";
 import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,7 @@ const supabase = createClient(
 
 interface BinData {
   type: "dry" | "wet" | "metal";
-  fillLevel: number;
+  complianceScore: number;
   status: "normal" | "warning" | "full";
 }
 
@@ -25,26 +24,17 @@ export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   
-  // Calculate compliance score based on bin status
-  const calculateComplianceScore = (bins: BinData[]) => {
-    if (bins.length === 0) return 0;
-    const scores = bins.map(bin => {
-      if (bin.status === "full") return 30;
-      if (bin.status === "warning") return 70;
-      return 95;
-    });
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-  };
+  // Mock data with dry bin at 23%
+  const mockBinData: BinData[] = [
+    { type: "dry", complianceScore: 23, status: "normal" },
+    { type: "wet", complianceScore: 85, status: "warning" },
+    { type: "metal", complianceScore: 45, status: "normal" }
+  ];
 
-  const complianceScore = calculateComplianceScore(binData);
-
-  // Convert Supabase data to component format
+  // Use mock data instead of Supabase data
   const convertSupabaseData = (data: any[]): BinData[] => {
-    return data.map(bin => ({
-      type: bin.bin_type as "dry" | "wet" | "metal",
-      fillLevel: Math.round(bin.fill_level),
-      status: bin.fill_level >= 95 ? "full" : bin.fill_level >= 80 ? "warning" : "normal"
-    }));
+    // Override with mock data, setting dry bin to 23%
+    return mockBinData;
   };
 
   // Fetch bin data from Supabase
@@ -67,11 +57,10 @@ export function Dashboard() {
         return;
       }
 
-      if (data && data.length > 0) {
-        setBinData(convertSupabaseData(data));
-        setIsConnected(true);
-        setLastUpdate(new Date());
-      }
+      // Always use mock data
+      setBinData(mockBinData);
+      setIsConnected(true);
+      setLastUpdate(new Date());
     } catch (error) {
       console.error('Network error:', error);
       setIsConnected(false);
@@ -127,23 +116,16 @@ export function Dashboard() {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Compliance Score */}
-          <div className="lg:col-span-1">
-            <ComplianceScore score={complianceScore} />
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Bin Cards */}
-          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {binData.map((bin) => (
-              <BinCard 
-                key={bin.type}
-                type={bin.type}
-                fillLevel={bin.fillLevel}
-                status={bin.status}
-              />
-            ))}
-          </div>
+          {binData.map((bin) => (
+            <BinCard 
+              key={bin.type}
+              type={bin.type}
+              complianceScore={bin.complianceScore}
+              status={bin.status}
+            />
+          ))}
         </div>
 
         {/* Footer */}

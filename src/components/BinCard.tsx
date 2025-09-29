@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 
 interface BinCardProps {
   type: "dry" | "wet" | "metal";
-  fillLevel: number;
+  complianceScore: number;
   status: "normal" | "warning" | "full";
 }
 
@@ -43,7 +43,7 @@ const getStatusText = (status: string) => {
   }
 };
 
-export function BinCard({ type, fillLevel, status }: BinCardProps) {
+export function BinCard({ type, complianceScore, status }: BinCardProps) {
   const config = binConfig[type];
   
   return (
@@ -72,11 +72,11 @@ export function BinCard({ type, fillLevel, status }: BinCardProps) {
       
       <div className="space-y-3">
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Fill Level</span>
-          <span className="font-medium text-foreground">{fillLevel}%</span>
+          <span className="text-muted-foreground">Compliance Score</span>
+          <span className="font-medium text-foreground">{complianceScore}%</span>
         </div>
         <Progress 
-          value={fillLevel} 
+          value={complianceScore} 
           className="h-3 bg-secondary"
         />
       </div>
